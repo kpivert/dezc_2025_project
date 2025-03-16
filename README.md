@@ -6,7 +6,12 @@ Final Project for 2025 Cohort of the [DataTalksClub Data Engineering Zoomcamp](h
 
 ## Data
 
+Example API URL (with 2022 UUID)
+https://data.cms.gov/data-api/v1/dataset/8889d81e-2ee7-448f-8713-f071038289b5/data
+
 GET /dataset/{uuid}/data
+
+
 
 [CMS API Documentation](https://data.cms.gov/provider-summary-by-type-of-service/medicare-physician-other-practitioners/medicare-physician-other-practitioners-by-provider/api-docs)
 
