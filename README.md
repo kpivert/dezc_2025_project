@@ -1,4 +1,5 @@
-# U.S. Physician and Surgeon Dashboard
+# Medicare Physician & Other Practitioners Data
+## U.S. Physician and Surgeon Dashboard
 
 Final Project for 2025 Cohort of the [DataTalksClub Data Engineering Zoomcamp](https://github.com/DataTalksClub/data-engineering-zoomcamp/tree/main)
 
