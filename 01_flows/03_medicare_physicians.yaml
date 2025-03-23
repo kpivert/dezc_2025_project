@@ -1,0 +1,274 @@
+id: 003_medicare_physicians
+namespace: medicare
+
+pluginDefaults:
+  - type: io.kestra.plugin.gcp
+    values:
+      serviceAccount: "{{kv('GCP_CREDS')}}"
+      projectId: "{{kv('GCP_PROJECT_ID')}}"
+      location: "{{kv('GCP_LOCATION')}}"
+      bucket: "{{kv('GCP_BUCKET_NAME')}}"
+      dataset: "{{kv('GCP_DATASET')}}"
+
+variables:
+  gcs_file: "gs://{{kv('GCP_BUCKET_NAME')}}/medicare"
+  data: "{{outputs.dlt_pipeline.outputFiles['medicare' ~ '.csv']}}"
+
+tasks:
+  - id: dlt_pipeline
+    type: io.kestra.plugin.scripts.python.Script
+    namespaceFiles:
+      enabled: true
+    docker:
+      image: python:3.11
+    outputFiles:
+      - "*.csv"
+    beforeCommands:
+      - pip install kestra
+      - pip install pandas
+      # - pip install "dlt[bigquery]"
+      - pip install "dlt[duckdb]"
+      - pip install google-cloud-bigquery
+      - pip install google-cloud-bigquery-storage
+      # - dlt --non-interactive init inbox bigquery
+    script: |
+
+      import dlt
+      import duckdb
+      from dlt.sources.helpers.rest_client import RESTClient
+      from dlt.sources.helpers.rest_client.paginators import PageNumberPaginator
+
+      @dlt.resource(name="medicare_data")
+      def medicare(): # nyc_taxi
+        client = RESTClient(
+          base_url = "https://data.cms.gov/data-api/v1/dataset/",
+          paginator = PageNumberPaginator(
+            base_page = 1,
+            total_path = None
+          )
+        )
+
+        for page in client.paginate("8889d81e-2ee7-448f-8713-f071038289b5/data"):
+          yield(page)
+
+      pipeline = dlt.pipeline(
+          pipeline_name="medicare_pipeline",
+          destination="duckdb",
+          dataset_name="medicare_data"
+      )
+
+      load_info = pipeline.run(medicare)
+
+      conn = duckdb.connect(f"{pipeline.pipeline_name}.duckdb")
+
+      conn.sql(f"SET search_path = '{pipeline.dataset_name}'")
+
+      conn.sql("DESCRIBE").df()
+
+      df = pipeline.dataset(dataset_type="default").medicare_data.df()
+
+      df.to_csv('medicare.csv', index=False)
+
+  - id: upload_to_gcs
+    type: io.kestra.plugin.gcp.gcs.Upload
+    from: "{{render(vars.data)}}"
+    to: "{{render(vars.gcs_file)}}"
+
+  - id: bq_medicare_data
+    projectId: "{{kv('GCP_PROJECT_ID')}}"
+    type: io.kestra.plugin.gcp.bigquery.Query
+    sql: |
+          CREATE TABLE IF NOT EXISTS `{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_DATASET')}}.providers`
+          (
+              rndrng_npi STRING,
+              rndrng_prvdr_last_org_name STRING,
+              rndrng_prvdr_first_name STRING,
+              rndrng_prvdr_mi STRING,
+              rndrng_prvdr_crdntls STRING,
+              rndrng_prvdr_gndr STRING,
+              rndrng_prvdr_ent_cd STRING,
+              rndrng_prvdr_st1 STRING,
+              rndrng_prvdr_st2 STRING,
+              rndrng_prvdr_city STRING,
+              rndrng_prvdr_state_abrvtn STRING,
+              rndrng_prvdr_state_fips STRING,
+              rndrng_prvdr_zip5 STRING,
+              rndrng_prvdr_ruca STRING,
+              rndrng_prvdr_ruca_desc STRING,
+              rndrng_prvdr_cntry STRING,
+              rndrng_prvdr_type STRING,
+              rndrng_prvdr_mdcr_prtcptg_ind STRING,
+              tot_hcpcs_cds NUMERIC,
+              tot_benes NUMERIC,
+              tot_srvcs NUMERIC,
+              tot_sbmtd_chrg NUMERIC,
+              tot_mdcr_alowd_amt NUMERIC,
+              tot_mdcr_pymt_amt NUMERIC,
+              tot_mdcr_stdzd_amt NUMERIC,
+              drug_sprsn_ind STRING,
+              drug_tot_hcpcs_cds NUMERIC,
+              drug_tot_benes NUMERIC,
+              drug_tot_srvcs NUMERIC,
+              drug_sbmtd_chrg NUMERIC,
+              drug_mdcr_alowd_amt NUMERIC,
+              drug_mdcr_pymt_amt NUMERIC,
+              drug_mdcr_stdzd_amt NUMERIC,
+              med_sprsn_ind STRING,
+              med_tot_hcpcs_cds NUMERIC,
+              med_tot_benes NUMERIC,
+              med_tot_srvcs NUMERIC,
+              med_sbmtd_chrg NUMERIC,
+              med_mdcr_alowd_amt NUMERIC,
+              med_mdcr_pymt_amt NUMERIC,
+              med_mdcr_stdzd_amt NUMERIC,
+              bene_avg_age NUMERIC,
+              bene_age_lt_65_cnt NUMERIC,
+              bene_age_65_74_cnt NUMERIC,
+              bene_age_75_84_cnt NUMERIC,
+              bene_age_gt_84_cnt NUMERIC,
+              bene_feml_cnt NUMERIC,
+              bene_male_cnt NUMERIC,
+              bene_race_wht_cnt NUMERIC,
+              bene_race_black_cnt NUMERIC,
+              bene_race_api_cnt NUMERIC,
+              bene_race_hspnc_cnt NUMERIC,
+              bene_race_nat_ind_cnt NUMERIC,
+              bene_race_othr_cnt NUMERIC,
+              bene_dual_cnt NUMERIC,
+              bene_ndual_cnt NUMERIC,
+              bene_cc_bh_adhd_oth_cd_v1_pct NUMERIC,
+              bene_cc_bh_alcohol_drug_v1_pct NUMERIC,
+              bene_cc_bh_tobacco_v1_pct NUMERIC,
+              bene_cc_bh_alz_non_alzdem_v2_pct NUMERIC,
+              bene_cc_bh_anxiety_v1_pct NUMERIC,
+              bene_cc_bh_bipolar_v1_pct NUMERIC,
+              bene_cc_bh_mood_v2_pct NUMERIC,
+              bene_cc_bh_depress_v1_pct NUMERIC,
+              bene_cc_bh_pd_v1_pct NUMERIC,
+              bene_cc_bh_ptsd_v1_pct NUMERIC,
+              bene_cc_bh_schizo_oth_psy_v1_pct NUMERIC,
+              bene_cc_ph_asthma_v2_pct NUMERIC,
+              bene_cc_ph_afib_v2_pct NUMERIC,
+              bene_cc_ph_cancer6_v2_pct NUMERIC,
+              bene_cc_ph_ckd_v2_pct NUMERIC,
+              bene_cc_ph_copd_v2_pct NUMERIC,
+              bene_cc_ph_diabetes_v2_pct NUMERIC,
+              bene_cc_ph_hf_non_ihd_v2_pct NUMERIC,
+              bene_cc_ph_hyperlipidemia_v2_pct NUMERIC,
+              bene_cc_ph_hypertension_v2_pct NUMERIC,
+              bene_cc_ph_ischemic_heart_v2_pct NUMERIC,
+              bene_cc_ph_osteoporosis_v2_pct NUMERIC,
+              bene_cc_ph_parkinson_v2_pct NUMERIC,
+              bene_cc_ph_arthritis_v2_pct NUMERIC,
+              bene_cc_ph_stroke_tia_v2_pct NUMERIC,
+              bene_avg_risk_scre NUMERIC,
+              _dlt_load_id NUMERIC,
+              _dlt_id STRING
+          )
+          CLUSTER BY rndrng_prvdr_type;
+
+  - id: bq_medicare_ext
+    type: io.kestra.plugin.gcp.bigquery.Query
+    sql: |
+      CREATE OR REPLACE EXTERNAL TABLE `{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_DATASET')}}._ext`
+      (
+              rndrng_npi STRING,
+              rndrng_prvdr_last_org_name STRING,
+              rndrng_prvdr_first_name STRING,
+              rndrng_prvdr_mi STRING,
+              rndrng_prvdr_crdntls STRING,
+              rndrng_prvdr_gndr STRING,
+              rndrng_prvdr_ent_cd STRING,
+              rndrng_prvdr_st1 STRING,
+              rndrng_prvdr_st2 STRING,
+              rndrng_prvdr_city STRING,
+              rndrng_prvdr_state_abrvtn STRING,
+              rndrng_prvdr_state_fips STRING,
+              rndrng_prvdr_zip5 STRING,
+              rndrng_prvdr_ruca STRING,
+              rndrng_prvdr_ruca_desc STRING,
+              rndrng_prvdr_cntry STRING,
+              rndrng_prvdr_type STRING,
+              rndrng_prvdr_mdcr_prtcptg_ind STRING,
+              tot_hcpcs_cds NUMERIC,
+              tot_benes NUMERIC,
+              tot_srvcs NUMERIC,
+              tot_sbmtd_chrg NUMERIC,
+              tot_mdcr_alowd_amt NUMERIC,
+              tot_mdcr_pymt_amt NUMERIC,
+              tot_mdcr_stdzd_amt NUMERIC,
+              drug_sprsn_ind STRING,
+              drug_tot_hcpcs_cds NUMERIC,
+              drug_tot_benes NUMERIC,
+              drug_tot_srvcs NUMERIC,
+              drug_sbmtd_chrg NUMERIC,
+              drug_mdcr_alowd_amt NUMERIC,
+              drug_mdcr_pymt_amt NUMERIC,
+              drug_mdcr_stdzd_amt NUMERIC,
+              med_sprsn_ind STRING,
+              med_tot_hcpcs_cds NUMERIC,
+              med_tot_benes NUMERIC,
+              med_tot_srvcs NUMERIC,
+              med_sbmtd_chrg NUMERIC,
+              med_mdcr_alowd_amt NUMERIC,
+              med_mdcr_pymt_amt NUMERIC,
+              med_mdcr_stdzd_amt NUMERIC,
+              bene_avg_age NUMERIC,
+              bene_age_lt_65_cnt NUMERIC,
+              bene_age_65_74_cnt NUMERIC,
+              bene_age_75_84_cnt NUMERIC,
+              bene_age_gt_84_cnt NUMERIC,
+              bene_feml_cnt NUMERIC,
+              bene_male_cnt NUMERIC,
+              bene_race_wht_cnt NUMERIC,
+              bene_race_black_cnt NUMERIC,
+              bene_race_api_cnt NUMERIC,
+              bene_race_hspnc_cnt NUMERIC,
+              bene_race_nat_ind_cnt NUMERIC,
+              bene_race_othr_cnt NUMERIC,
+              bene_dual_cnt NUMERIC,
+              bene_ndual_cnt NUMERIC,
+              bene_cc_bh_adhd_oth_cd_v1_pct NUMERIC,
+              bene_cc_bh_alcohol_drug_v1_pct NUMERIC,
+              bene_cc_bh_tobacco_v1_pct NUMERIC,
+              bene_cc_bh_alz_non_alzdem_v2_pct NUMERIC,
+              bene_cc_bh_anxiety_v1_pct NUMERIC,
+              bene_cc_bh_bipolar_v1_pct NUMERIC,
+              bene_cc_bh_mood_v2_pct NUMERIC,
+              bene_cc_bh_depress_v1_pct NUMERIC,
+              bene_cc_bh_pd_v1_pct NUMERIC,
+              bene_cc_bh_ptsd_v1_pct NUMERIC,
+              bene_cc_bh_schizo_oth_psy_v1_pct NUMERIC,
+              bene_cc_ph_asthma_v2_pct NUMERIC,
+              bene_cc_ph_afib_v2_pct NUMERIC,
+              bene_cc_ph_cancer6_v2_pct NUMERIC,
+              bene_cc_ph_ckd_v2_pct NUMERIC,
+              bene_cc_ph_copd_v2_pct NUMERIC,
+              bene_cc_ph_diabetes_v2_pct NUMERIC,
+              bene_cc_ph_hf_non_ihd_v2_pct NUMERIC,
+              bene_cc_ph_hyperlipidemia_v2_pct NUMERIC,
+              bene_cc_ph_hypertension_v2_pct NUMERIC,
+              bene_cc_ph_ischemic_heart_v2_pct NUMERIC,
+              bene_cc_ph_osteoporosis_v2_pct NUMERIC,
+              bene_cc_ph_parkinson_v2_pct NUMERIC,
+              bene_cc_ph_arthritis_v2_pct NUMERIC,
+              bene_cc_ph_stroke_tia_v2_pct NUMERIC,
+              bene_avg_risk_scre NUMERIC,
+              _dlt_load_id NUMERIC,
+              _dlt_id STRING
+      )
+      OPTIONS (
+          format = 'CSV',
+          uris = ['{{render(vars.gcs_file)}}'],
+          skip_leading_rows = 1
+      );
+
+  - id: bq_medicare_provide_table
+    type: io.kestra.plugin.gcp.bigquery.Query
+    sql: |
+      CREATE OR REPLACE TABLE `{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_DATASET')}}.providers`
+      CLUSTER BY rndrng_prvdr_type
+      AS
+      SELECT
+        *
+      FROM `{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_DATASET')}}._ext`;
