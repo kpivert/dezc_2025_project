@@ -3,7 +3,13 @@
 
 Final Project for 2025 Cohort of the [DataTalksClub Data Engineering Zoomcamp](https://github.com/DataTalksClub/data-engineering-zoomcamp/tree/main)
 
-## Motivation
+## Problem Description & Motivation
+
+### 1. Ingestion
+
+
+
+### 2.
 
 ## Data
 
