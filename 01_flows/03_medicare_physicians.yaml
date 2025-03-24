@@ -11,63 +11,20 @@ pluginDefaults:
       dataset: "{{kv('GCP_DATASET')}}"
 
 variables:
-  gcs_file: "gs://{{kv('GCP_BUCKET_NAME')}}/medicare"
-  data: "{{outputs.dlt_pipeline.outputFiles['medicare' ~ '.csv']}}"
+  file: "medicare.csv"
+  gcs_file: "gs://{{kv('GCP_BUCKET_NAME')}}/{{vars.file}}"
+  data: "{{outputs.extract.outputFiles['medicare.csv']}}"
 
 tasks:
-  - id: dlt_pipeline
-    type: io.kestra.plugin.scripts.python.Script
-    namespaceFiles:
-      enabled: true
-    docker:
-      image: python:3.11
+
+  - id: extract
+    type: io.kestra.plugin.scripts.shell.Commands
     outputFiles:
       - "*.csv"
-    beforeCommands:
-      - pip install kestra
-      - pip install pandas
-      # - pip install "dlt[bigquery]"
-      - pip install "dlt[duckdb]"
-      - pip install google-cloud-bigquery
-      - pip install google-cloud-bigquery-storage
-      # - dlt --non-interactive init inbox bigquery
-    script: |
-
-      import dlt
-      import duckdb
-      from dlt.sources.helpers.rest_client import RESTClient
-      from dlt.sources.helpers.rest_client.paginators import PageNumberPaginator
-
-      @dlt.resource(name="medicare_data")
-      def medicare(): # nyc_taxi
-        client = RESTClient(
-          base_url = "https://data.cms.gov/data-api/v1/dataset/",
-          paginator = PageNumberPaginator(
-            base_page = 1,
-            total_path = None
-          )
-        )
-
-        for page in client.paginate("8889d81e-2ee7-448f-8713-f071038289b5/data"):
-          yield(page)
-
-      pipeline = dlt.pipeline(
-          pipeline_name="medicare_pipeline",
-          destination="duckdb",
-          dataset_name="medicare_data"
-      )
-
-      load_info = pipeline.run(medicare)
-
-      conn = duckdb.connect(f"{pipeline.pipeline_name}.duckdb")
-
-      conn.sql(f"SET search_path = '{pipeline.dataset_name}'")
-
-      conn.sql("DESCRIBE").df()
-
-      df = pipeline.dataset(dataset_type="default").medicare_data.df()
-
-      df.to_csv('medicare.csv', index=False)
+    taskRunner:
+      type: io.kestra.plugin.core.runner.Process
+    commands:
+      - wget -qO- https://data.cms.gov/sites/default/files/2024-06/5aed74f7-d04e-48b4-93b3-d396a2e59c87/MUP_PHY_R24_P07_V10_D22_Prov.csv > {{render(vars.file)}}
 
   - id: upload_to_gcs
     type: io.kestra.plugin.gcp.gcs.Upload
@@ -161,9 +118,7 @@ tasks:
               bene_cc_ph_parkinson_v2_pct NUMERIC,
               bene_cc_ph_arthritis_v2_pct NUMERIC,
               bene_cc_ph_stroke_tia_v2_pct NUMERIC,
-              bene_avg_risk_scre NUMERIC,
-              _dlt_load_id NUMERIC,
-              _dlt_id STRING
+              bene_avg_risk_scre NUMERIC
           )
           CLUSTER BY rndrng_prvdr_type;
 
@@ -253,9 +208,7 @@ tasks:
               bene_cc_ph_parkinson_v2_pct NUMERIC,
               bene_cc_ph_arthritis_v2_pct NUMERIC,
               bene_cc_ph_stroke_tia_v2_pct NUMERIC,
-              bene_avg_risk_scre NUMERIC,
-              _dlt_load_id NUMERIC,
-              _dlt_id STRING
+              bene_avg_risk_scre NUMERIC
       )
       OPTIONS (
           format = 'CSV',
@@ -263,7 +216,7 @@ tasks:
           skip_leading_rows = 1
       );
 
-  - id: bq_medicare_provide_table
+  - id: bq_medicare_provider_table
     type: io.kestra.plugin.gcp.bigquery.Query
     sql: |
       CREATE OR REPLACE TABLE `{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_DATASET')}}.providers`
@@ -272,3 +225,8 @@ tasks:
       SELECT
         *
       FROM `{{kv('GCP_PROJECT_ID')}}.{{kv('GCP_DATASET')}}._ext`;
+
+  - id: purge_files
+    type: io.kestra.plugin.core.storage.PurgeCurrentExecutionFiles
+    description: If you'd like to explore Kestra outputs, disable it.
+    disabled: false
