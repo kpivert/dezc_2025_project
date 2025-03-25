@@ -3,15 +3,17 @@
   "private": true,
   "scripts": {
     "clean": "rimraf src/.observablehq/cache",
-    "build": "observable build",
+    "build": "rimraf dist && observable build",
     "dev": "observable preview",
     "deploy": "observable deploy",
     "observable": "observable"
   },
   "dependencies": {
+    "@google-cloud/bigquery": "^7.8.0",
     "@observablehq/framework": "^1.13.2",
     "d3-dsv": "^3.0.1",
-    "d3-time-format": "^4.1.0"
+    "d3-time-format": "^4.1.0",
+    "dotenv": "^16.4.7"
   },
   "devDependencies": {
     "rimraf": "^5.0.5"
