@@ -1,0 +1,18 @@
+inputs:
+  - id: medicare_year
+    type: SELECT
+    displayName: Select CMS Year Data
+    values:
+      - "2020"
+      - "2021"
+
+variables:
+  urls_map: {
+      "2020": "https://data.cms.gov/sites/default/files/2024-06/5aed74f7-d04e-48b4-93b3-d396a2e59c87/MUP_PHY_R24_P07_V10_D22_Prov.csv",
+      "2021": "https://data.cms.gov/sites/default/files/2024-06/bc3a06d3-fdae-4cc0-b3ae-9738f3f0f8dc/MUP_PHY_R24_P07_V10_D21_Prov.csv"
+  }
+
+tasks:
+  - id: log_test
+    type: io.kestra.plugin.core.log.Log
+    message: "{{ vars.urls_map[inputs.medicare_year] }}"
