@@ -9,4 +9,4 @@ SELECT
   COUNT(*) AS providers
 FROM medicare_providers
 GROUP BY year
-ORDER BY year;
+ORDER BY year
