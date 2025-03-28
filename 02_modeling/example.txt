@@ -1,0 +1,10 @@
+SELECT
+  filename,
+  CAST(REGEXP_EXTRACT(filename, r'(\d{4})') AS INT64) AS year
+FROM your_table;
+
+SELECT column_name, COUNT(*) AS row_count
+FROM dataset.table
+GROUP BY column_name
+ORDER BY row_count DESC;
+

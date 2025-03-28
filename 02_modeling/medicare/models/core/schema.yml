@@ -1,0 +1,7 @@
+version: 2
+
+models:
+  - name: medicare_providers_year
+    description: >
+      Count the total number of Medicare providers by reporting year.
+

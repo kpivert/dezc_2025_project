@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: staging
+    database: dezc-final-project-medicare
+    schema: medicare
+
+    tables:
+      - name: providers
+
+models:
+  - name: stg_medicare_providers
+    description: ""
